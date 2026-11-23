@@ -21,7 +21,7 @@ Before starting, make sure you have installed the following software on your com
 Open a terminal (or PowerShell on Windows), navigate to a suitable directory and run:
 
 ```bash
-git clone https://github.com/MaxwellHogan/ROS2_kinova.git
+git clone https://github.com/Tom-Hickling/ROS2_kinova_lab1
 ```
 
 Navigate into the repository:
