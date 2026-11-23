@@ -218,22 +218,205 @@ If you subsequently plan a gripper trajectory in RViz, update the planning start
 
 ## 8. Laboratory exercises
 
-The exercises introduce robot programming and kinematics progressively.
+## Exercise 1 — Explore the ROS 2 system (10 min)
 
-| Exercise | Topic |
-|---|---|
-| 1 | Reading robot joint positions using ROS 2 |
-| 2 | Sending joint trajectory commands |
-| 3 | Forward kinematics and homogeneous transformations |
-| 4 | Inverse kinematics using numerical methods |
-| 5 | Inverse kinematics using optimisation |
-| 6 | Cartesian waypoint execution |
+```bash
+ros2 node list
+ros2 topic list
+ros2 topic list -t
+ros2 action list -t
+ros2 control list_controllers
+```
 
-You will use Python and ROS 2 to observe, command and model the robot.
+**Record:**
+- One node involved in simulation or robot control: __________
+- The topic that provides joint state feedback: __________
+- The active controller used to move the arm: __________
 
-Follow the separate student laboratory instructions provided with the exercises.
+**Question:** What is the difference between a topic and an action?
 
-**Important:** Some exercises publish joint commands directly to ROS 2 controllers rather than through MoveIt. These commands do not automatically receive MoveIt's collision checking. Only perform these exercises with simulated hardware unless authorised to work with a physical robot under supervision.
+## Exercise 2 — Read joint data (10 min)
+
+```bash
+ros2 topic echo /joint_states --once
+ros2 topic echo /joint_states --field name --once
+ros2 topic echo /joint_states --field position --once
+ros2 topic echo /joint_states --field velocity --once
+ros2 topic echo /joint_states --field effort --once
+ros2 interface show sensor_msgs/msg/JointState
+```
+
+Press **Ctrl+C** to stop any continuous `ros2 topic echo` command.
+
+**Record:**
+- Position of `joint_1`: __________ rad
+- Position of `joint_2`: __________ rad
+- Velocity of `joint_1` while stationary: __________ rad/s
+
+**Important:** Entries in `position`, `velocity`, and `effort` correspond to the names at the *same indices* in `name`. The `name` array need not be ordered `joint_1`, `joint_2`, ... .
+
+**Question:** Convert 0.3 rad to degrees using 180/π. Approximately how many degrees is it?
+
+## Exercise 3 — Investigate publishers and subscribers (10 min)
+
+```bash
+ros2 topic info /joint_states --verbose
+ros2 topic hz /joint_states
+ros2 topic bw /joint_states
+ros2 control list_hardware_interfaces
+```
+
+**Record:**
+- Average joint-state publishing rate: __________ Hz
+- Approximate bandwidth: __________
+- Number of publishers on `/joint_states`: __________
+- One hardware command interface: __________
+
+**Question:** Why is frequent feedback important when the arm moves?
+
+## Exercise 4 — Send a joint position target (10 min)
+
+Move **joint 1** to **0.3 rad** over **4 seconds**:
+
+```bash
+ros2 topic pub --once \
+  /joint_trajectory_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{
+    joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6],
+    points: [{
+      positions: [0.3, 0, 0, 0, 0, 0],
+      time_from_start: {sec: 4}
+    }]
+  }'
+```
+
+Check the result:
+
+```bash
+ros2 topic echo /joint_states --once
+```
+
+Return all six joints to zero:
+
+```bash
+ros2 topic pub --once \
+  /joint_trajectory_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{
+    joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6],
+    points: [{
+      positions: [0, 0, 0, 0, 0, 0],
+      time_from_start: {sec: 4}
+    }]
+  }'
+```
+
+**Challenge:** Change the first target to **−0.4 rad**. Which part of the command changed? Return to zero afterwards.
+
+## Exercise 5 — Move several joints (10 min)
+
+```bash
+ros2 topic pub --once \
+  /joint_trajectory_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{
+    joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6],
+    points: [{
+      positions: [0.3, 0.2, -0.2, 0, 0, 0],
+      time_from_start: {sec: 5}
+    }]
+  }'
+```
+
+**Challenges:**
+1. Change the duration from 5 to 10 seconds. What happens to the speed?
+2. Command a small angle (for example 0.15 rad) at joint 4 while setting the others to zero.
+3. Return the arm to its zero configuration using the command in Exercise 4.
+
+## Exercise 6 — Trajectory through several waypoints (10 min)
+
+```bash
+ros2 topic pub --once \
+  /joint_trajectory_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{
+    joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6],
+    points: [
+      {positions: [0.2, 0, 0, 0, 0, 0], time_from_start: {sec: 3}},
+      {positions: [0.2, 0.2, -0.2, 0, 0, 0], time_from_start: {sec: 6}},
+      {positions: [0, 0, 0, 0, 0, 0], time_from_start: {sec: 9}}
+    ]
+  }'
+```
+
+**Question:** Are these end-effector XYZ waypoints or joint-angle waypoints? What would be required to command an XYZ target?
+
+## Exercise 7 — Inspect trajectory tracking (10 min)
+
+First check which controller-state topic exists:
+
+```bash
+ros2 topic list | grep joint_trajectory_controller
+```
+
+For the controller in this lab, inspect its state:
+
+```bash
+ros2 topic echo /joint_trajectory_controller/controller_state --once
+```
+
+If available, compare the `desired`, `actual`, and `error` fields while executing a longer, small motion. Controller state fields contain arrays in the order described by the controller-state `joint_names` field.
+
+Inspect its message type:
+
+```bash
+ros2 topic info /joint_trajectory_controller/controller_state
+ros2 interface show control_msgs/msg/JointTrajectoryControllerState
+```
+
+**Question:** What is the difference between a commanded joint position and an actual measured position?
+
+## Exercise 8 — Find the XYZ position of the end effector (10 min)
+
+```bash
+ros2 topic list | grep tf
+ros2 run tf2_ros tf2_echo base_link end_effector_link
+```
+
+The **translation** field is the end-effector **(x, y, z)** position, in metres, relative to `base_link` (if the named frames are available in your running robot description). Stop the command with **Ctrl+C**.
+
+**Record:**
+- End-effector XYZ at the zero configuration: __________ m
+- End-effector XYZ after moving joint 1: __________ m
+
+**Question:** How can a joint-space rotation produce a change in Cartesian position?
+
+## Optional extension — A ROS 2 action instead of a topic
+
+The controller also exposes a `FollowJointTrajectory` action, which provides a goal result and optional feedback:
+
+```bash
+ros2 action list -t
+ros2 action info /joint_trajectory_controller/follow_joint_trajectory
+ros2 interface show control_msgs/action/FollowJointTrajectory
+```
+
+To send a small joint motion as an action:
+
+```bash
+ros2 action send_goal --feedback \
+  /joint_trajectory_controller/follow_joint_trajectory \
+  control_msgs/action/FollowJointTrajectory \
+  '{
+    trajectory: {
+      joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6],
+      points: [{positions: [0, 0, 0, 0, 0, 0], time_from_start: {sec: 4}}]
+    }
+  }'
+```
+
+**Question:** Why might an action be more useful than a topic when a task needs to report success or failure?
 
 ## 9. Troubleshooting
 
